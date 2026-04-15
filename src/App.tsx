@@ -38,38 +38,51 @@ import {
   Eye,
   EyeOff,
   X,
+  Trash2,
 } from 'lucide-react';
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
 const DATA_SOURCES = [
-  { id: 'store', title: '店铺列表', desc: '同步指定平台的所有店铺与档案数据', api: '' },
-  { id: 'product', title: '商品列表', desc: '同步一段时间内的所有货品与相关信息', api: '' },
-  { id: 'order', title: '订单列表', desc: '同步一段时间内的所有订单数据（暂不支持淘系、拼多多订单）', api: '' },
-  { id: 'sales_out', title: '销售出库单列表', desc: '同步指定查询条件的销售出库单', api: '' },
-  { id: 'purchase_in', title: '采购入库单列表', desc: '同步指定查询条件的采购入库单', api: '' },
-  { id: 'return_order', title: '退换货订单列表', desc: '同步指定查询条件的全部退换货单', api: '' },
-  { id: 'inventory', title: '商品库存列表', desc: '同步一段时间内的所有商品库存', api: '' },
+  { id: 'queryWarehouseStorage', title: '商品库存列表', desc: '同步指定海外仓的库存数据' },
+];
+
+const WAREHOUSE = [
+  { id: '1030075', title: 'CATO Warehouse', desc: ''},
+  { id: '1000001', title: 'AU Warehouse', desc: ''},
+  { id: '1054191', title: 'USWC2 Warehouse', desc: ''},
 ];
 
 const FIELDS = [
-  { id: 'code', name: '货品编号', type: 'A', locked: true },
-  { id: 'name', name: '货品名称', type: 'A' },
-  { id: 'barcode', name: '条码', type: 'A' },
-  { id: 'weight', name: '重量', type: '#' },
-  { id: 'image', name: '图片URL', type: '🔗' },
-  { id: 'merchant_code', name: '商家编码', type: 'A' },
-  { id: 'sku_id', name: '单品 ID', type: 'A' },
-  { id: 'brand_code', name: '品牌编号', type: 'A' },
-  { id: 'brand_name', name: '品牌名称', type: 'v' },
-  { id: 'unique_key', name: '明细唯一键', type: 'A' },
-  { id: 'defective', name: '残次品', type: 'v' },
+  { id: 'merchandiseSerno', name: '商品条码', type: 'A', locked: false },
+  { id: 'productName', name: '商品名称', type: 'A', locked: false },
+  { id: 'productCode', name: '商品条码', type: 'A', locked: false },
+  { id: 'specification', name: '商品规格', type: 'A', locked: false },
+  { id: 'isActive', name: '是否有效', type: 'A', locked: false },
+  { id: 'isReturnInventory', name: '是否退货库存', type: 'A', locked: false },
+  { id: 'warehouseID', name: '万邑通仓库ID', type: 'A', locked: false },
+  { id: 'warehouseCode', name: '万邑通仓库Code', type: 'A', locked: false },
+  { id: 'warehouseName', name: '万邑通仓库名称', type: 'A', locked: false },
+  { id: 'inStockQty', name: '在库总库存', type: 'A', locked: false },
+  { id: 'qtyAvailable', name: '可用库存数量', type: 'A', locked: false },
+  { id: 'qtyWaitOut', name: '待发数量', type: 'A', locked: false },
+  { id: 'qtyLostConfirming', name: '丢失确认中数量', type: 'A', locked: false },
+  { id: 'addValueFrozenQty', name: '增值处理中数量', type: 'A', locked: false },
+  { id: 'qtyFrozen', name: '在库异常数量', type: 'A', locked: false },
+  { id: 'qtyDestruction', name: '待销毁数量', type: 'A', locked: false },
+  { id: 'prohibitFrozenQty', name: '失效VAT冻结数量', type: 'A', locked: false },
+  { id: 'prohibitUsableQty', name: '禁止出库数量', type: 'A', locked: false },
+  { id: 'pipelineInventory', name: '在途待入库数量', type: 'A', locked: false },
+  { id: 'preSaleWaitOutQty', name: '预售待发数量', type: 'A', locked: false },
 ];
 
 export default function App() {
   const [activeNav, setActiveNav] = useState('datasource');
-  const [selectedSource, setSelectedSource] = useState('store');
+  const [action, setAction] = useState('queryWarehouseStorage');
+  const [warehouseID, setWarehouseID] = useState('1030075');
+  const [account, setAccount] = useState<Record<string, string> | null>(null);
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [form] = Form.useForm();
   const [modalForm] = Form.useForm();
@@ -78,6 +91,26 @@ export default function App() {
 
   const [userId, setUserId] = useState('');
   const [tenantKey, setTenantKey] = useState('');
+
+  // 校验错误状态
+  const [accountError, setAccountError] = useState('');
+  const [fieldsError, setFieldsError] = useState('');
+
+  // 计算所有可编辑字段（非锁定字段）
+  const editableFields = FIELDS.filter(field => !field.locked);
+  const editableFieldIds = editableFields.map(field => field.id);
+  // 字段选中状态管理（仅管理可编辑字段，锁定字段始终选中且不可更改）
+  const [selectedFieldIds, setSelectedFieldIds] = useState<Set<string>>(
+    () => new Set(editableFieldIds) // 初始默认全部选中
+  );
+  // 判断是否全选（可编辑字段全部选中）
+  const isAllSelected = editableFieldIds.length > 0 && 
+    editableFieldIds.every(id => selectedFieldIds.has(id));
+
+  // 判断是否半选状态（部分选中）
+  const isIndeterminate = !isAllSelected && editableFieldIds.some(id => selectedFieldIds.has(id));
+  // 未来新增字段
+  const [newlyAddedFields, setNewlyAddedFields] = useState(true)
 
   useEffect(() => {
     bitable.getConfig().then(config => {
@@ -124,20 +157,71 @@ export default function App() {
     }
   };
 
+  // 校验 state 管理的字段（非 Ant Design Form 托管）
+  const validateStateFields = (): boolean => {
+    let valid = true;
+
+    if (!account) {
+      setAccountError('请设置一个关联账号');
+      valid = false;
+    } else {
+      setAccountError('');
+    }
+
+    const lockedCount = FIELDS.filter(f => f.locked).length;
+    if (lockedCount + selectedFieldIds.size === 0) {
+      setFieldsError('请至少选择一个字段');
+      valid = false;
+    } else {
+      setFieldsError('');
+    }
+
+    // 校验不通过时滚动到第一个出错的区域
+    if (!valid) {
+      const firstErrorSection = !account ? 'account' : 'fields';
+      scrollToSection(firstErrorSection);
+    }
+
+    return valid;
+  };
+
   const handleSaveConfig = (values: any) => {
-    console.log('Final Config:', values);
-    bitable.saveConfigAndGoNext({
+    if (!validateStateFields()) return;
+
+    const payload = {
       ...values,
-      selectedSource,
-    });
+      action: action,
+      warehouseID: warehouseID,
+      selectedFieldIds: Array.from(selectedFieldIds),
+      newlyAddedFields,
+      account,
+    };
+    console.log(payload);
+
+    bitable.saveConfigAndGoNext(payload);
+  };
+
+  const openAccountModal = () => {
+    if (account) {
+      modalForm.setFieldsValue(account);
+    } else {
+      modalForm.resetFields();
+    }
+    setIsModalOpen(true);
+  };
+
+  const handleAccountSave = (values: Record<string, string>) => {
+    setAccount(values);
+    setAccountError(''); // 保存账号后清除错误
+    setIsModalOpen(false);
   };
 
   const navItems = [
     { key: 'datasource', label: '数据源选择', icon: <Database size={16} /> },
     { key: 'account', label: '账号设置', icon: <UserCog size={16} /> },
-    { key: 'params', label: '参数设置', icon: <Settings size={16} /> },
+    // { key: 'params', label: '参数设置', icon: <Settings size={16} /> },
     { key: 'fields', label: '字段设置', icon: <LayoutGrid size={16} /> },
-    { key: 'sync', label: '同步设置', icon: <RefreshCw size={16} /> },
+    // { key: 'sync', label: '同步设置', icon: <RefreshCw size={16} /> },
   ];
 
   // 内联样式常量
@@ -166,6 +250,9 @@ export default function App() {
       padding: '32px',
       scrollBehavior: 'smooth' as const,
     },
+    scrollContainer: {
+      width: '50vw',
+    },
     section: { marginBottom: 40 },
     sectionTitle: { fontSize: 16, fontWeight: 500, marginBottom: 16 },
     dataSourceCard: (isSelected: boolean) => ({
@@ -188,7 +275,7 @@ export default function App() {
       borderStyle: 'dashed',
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'center',
+      justifyContent: 'flex-start',
       gap: 8,
       backgroundColor: '#f5f6f7',
     },
@@ -196,7 +283,11 @@ export default function App() {
     paramLabel: { display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8 },
     paramLabelText: { fontSize: 14, color: '#646a73' },
     requiredStar: { color: '#f54a45' },
-    fieldTable: { border: '1px solid #dee0e3', borderRadius: 8, overflow: 'hidden' },
+    fieldTable: (hasError: boolean) => ({
+      border: `1px solid ${hasError ? '#f54a45' : '#dee0e3'}`,
+      borderRadius: 8,
+      overflow: 'hidden' as const,
+    }),
     fieldHeader: {
       backgroundColor: '#f5f6f7',
       padding: '8px 16px',
@@ -205,7 +296,6 @@ export default function App() {
       justifyContent: 'space-between',
       alignItems: 'center',
     },
-    fieldList: { padding: 8 },
     fieldItem: {
       display: 'flex',
       alignItems: 'center',
@@ -261,133 +351,266 @@ export default function App() {
               style={{ borderRight: 0 }}
             />
           </div>
-          <div style={styles.sidebarFooter}>
+          {/* <div style={styles.sidebarFooter}>
             <HelpCircle size={16} />
             <span>使用说明</span>
-          </div>
+          </div> */}
         </div>
 
         {/* 主内容区域 */}
         <div style={styles.mainArea}>
           <div ref={scrollContainerRef} style={styles.scrollArea}>
-            {/* 数据源选择 */}
-            <section id="datasource" style={styles.section}>
-              <div style={styles.sectionTitle}>数据源选择</div>
-              <Space direction="vertical" style={{ width: '100%' }} size={12}>
-                {DATA_SOURCES.map((source) => (
-                  <div
-                    key={source.id}
-                    onClick={() => setSelectedSource(source.id)}
-                    style={styles.dataSourceCard(selectedSource === source.id)}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'flex-start' }}>
-                      <div style={styles.dataSourceIcon}>
-                        <Database size={18} />
+            <Form
+              form={form}
+              layout="vertical"
+              onFinish={handleSaveConfig}
+              style={styles.scrollContainer}
+            >
+              {/* 数据源选择 */}
+              <section id="datasource" style={styles.section}>
+                <div style={styles.sectionTitle}>数据源选择</div>
+                <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                  {DATA_SOURCES.map((source) => (
+                    <div
+                      key={source.id}
+                      onClick={() => setAction(source.id)}
+                      style={styles.dataSourceCard(action === source.id)}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <div style={styles.dataSourceIcon}>
+                          <Database size={18} />
+                        </div>
+                        <div>
+                          <div style={styles.dataSourceTitle}>{source.title}</div>
+                          <div style={styles.dataSourceDesc}>{source.desc}</div>
+                        </div>
                       </div>
-                      <div>
-                        <div style={styles.dataSourceTitle}>{source.title}</div>
-                        <div style={styles.dataSourceDesc}>{source.desc}</div>
+                      {action === source.id && (
+                        <div style={styles.checkIcon}>
+                          <Check size={18} />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </Space>
+              </section>
+
+              {/* 指定仓库 */}
+              <section id="warehouse" style={styles.section}>
+                <div style={styles.sectionTitle}>选择仓库</div>
+                <Space direction='vertical' style={{ width: '100%' }} size={12}>
+                  {WAREHOUSE.map((warehouse) => (
+                    <div
+                      key={warehouse.id}
+                      onClick={() => setWarehouseID(warehouse.id)}
+                      style={styles.dataSourceCard(warehouseID == warehouse.id)}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <div style={styles.dataSourceIcon}>
+                          <Database size={18} />
+                        </div>
+                        <div>
+                          <div style={styles.dataSourceTitle}>{warehouse.title} ( {warehouse.id} )</div>
+                          <div style={styles.dataSourceDesc}>{warehouse.desc}</div>
+                        </div>
+                      </div>
+                      {warehouseID === warehouse.id && (
+                        <div style={styles.checkIcon}>
+                          <Check size={18} />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </Space>
+              </section>
+
+              {/* 账号设置 */}
+              <section id="account" style={styles.section}>
+                <div style={styles.sectionTitle}>账号设置</div>
+                {account ? (
+                  <div
+                    style={{
+                      ...styles.dashedButton,
+                      borderStyle: 'solid',
+                      borderRadius: 8,
+                      borderColor: '#2b66ff',
+                      color: '#2b66ff',
+                      cursor: 'pointer',
+                      position: 'relative',
+                      backgroundColor: '#fff',
+                      padding: '0 15px',
+                      boxSizing: 'border-box',
+                    }}
+                    onClick={openAccountModal}
+                  >
+                    <UserCog size={18} />
+                    {account.accountName}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        right: 16,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        color: 'red',
+                        display: 'flex',
+                        alignItems: 'center',
+                        cursor: 'pointer',
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        Modal.confirm({
+                          title: '确认删除',
+                          content: `确定要删除账号「${account.accountName}」吗？`,
+                          okText: '删除',
+                          cancelText: '取消',
+                          okButtonProps: { danger: true },
+                          centered: true,
+                          onOk: () => {
+                            setAccount(null);
+                            modalForm.resetFields();
+                          },
+                        });
+                      }}
+                    >
+                      <Trash2 size={16} />
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <Button
+                      type="dashed"
+                      icon={<Plus size={18} />}
+                      onClick={openAccountModal}
+                      style={{
+                        ...styles.dashedButton,
+                        borderColor: accountError ? '#f54a45' : undefined,
+                      }}
+                    >
+                      关联账号
+                    </Button>
+                    {accountError && <div style={styles.errorText}>{accountError}</div>}
+                  </>
+                )}
+              </section>
+
+              {/* 参数设置 */}
+              {/* <section id="params" style={styles.section}>
+                <div style={styles.sectionTitle}>参数设置</div>
+                <div>
+                  <div style={styles.paramLabel}>
+                    <span style={styles.paramLabelText}>时间范围</span>
+                    <span style={styles.requiredStar}>*</span>
+                    <Tooltip title="选择同步的时间范围">
+                      <Info size={14} style={{ color: '#bbbfc4', cursor: 'help' }} />
+                    </Tooltip>
+                  </div>
+                  <Space size={12}>
+                    <Select defaultValue="recent" style={{ width: 160 }} options={[{ value: 'recent', label: '最近时间' }]} />
+                    <Select defaultValue="30d" style={{ width: 160 }} options={[{ value: '30d', label: '近 30 天' }]} />
+                  </Space>
+                </div>
+              </section> */}
+
+              {/* 字段设置 */}
+              <section id="fields" style={styles.section}>
+                <div style={styles.sectionTitle}>字段设置</div>
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 14, color: '#646a73', marginBottom: 8 }}>字段范围</div>
+                  <div style={styles.fieldTable(!!fieldsError)}>
+                    <div style={styles.fieldHeader}>
+                      <Checkbox 
+                        checked={isAllSelected}
+                        indeterminate={isIndeterminate}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setSelectedFieldIds(prev => {
+                            const newSet = new Set(prev);
+                            if (checked) {
+                              editableFieldIds.forEach(id => newSet.add(id));
+                            } else {
+                              editableFieldIds.forEach(id => newSet.delete(id));
+                            }
+                            return newSet;
+                          });
+                          if (e.target.checked) setFieldsError('');
+                        }}  
+                      >全选</Checkbox>
+                      <span style={{ fontSize: 12, color: '#8f959e' }}>
+                        已选择 {FIELDS.filter(f => f.locked).length + selectedFieldIds.size} 项
+                      </span>
+                    </div>
+                    <div style={{
+                        padding: 8,
+                        height: '55vh',
+                        overflowY: 'auto',
+                      }} 
+                    >
+                      {FIELDS.map((field) => {
+                        const isLocked = field.locked;
+                        const isChecked = isLocked ? true : selectedFieldIds.has(field.id);
+
+                        return (
+                          <div key={field.id} style={styles.fieldItem}>
+                            <Checkbox
+                              checked={isChecked}
+                              disabled={isLocked}
+                              onChange={(e) => {
+                                if (isLocked) return;
+                                const checked = e.target.checked;
+                                setSelectedFieldIds(prev => {
+                                  const newSet = new Set(prev);
+                                  checked ? newSet.add(field.id) : newSet.delete(field.id);
+                                  return newSet;
+                                });
+                                if (e.target.checked) setFieldsError('');
+                              }}
+                            >
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={styles.fieldTypeBadge}>{field.type}</span>
+                                <span style={{ color: isLocked ? '#bbbfc4' : 'inherit' }}>{field.name}</span>
+                                {isLocked && <Lock size={12} style={{ color: '#bbbfc4' }} />}
+                              </span>
+                            </Checkbox>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  {fieldsError && <div style={styles.errorText}>{fieldsError}</div>}
+                </div>
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ fontSize: 14, color: '#646a73', marginBottom: 12 }}>未来新增字段</div>
+                  <Radio.Group defaultValue={newlyAddedFields} onChange={(e) => setNewlyAddedFields(e.target.value)}>
+                    <Space direction="vertical">
+                      <Radio value={true}>包含</Radio>
+                      <Radio value={false}>不包含</Radio>
+                    </Space>
+                  </Radio.Group>
+                </div>
+              </section>
+
+              {/* 同步设置 */}
+              {/* <section id="sync" style={{ ...styles.section, marginBottom: 40 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <div style={styles.sectionTitle}>同步设置</div>
+                  <Switch defaultChecked size="small" />
+                </div>
+                <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 16 }}>
+                  根据你的设置，连接器会自动同步最新数据到当前数据表
+                </Text>
+                <Radio.Group defaultValue="hourly">
+                  <Space direction="vertical" size={16}>
+                    <div>
+                      <Radio value="hourly">按小时同步</Radio>
+                      <div style={{ marginLeft: 24, marginTop: 8 }}>
+                        <Select defaultValue="1h" style={{ width: 160 }} options={[{ value: '1h', label: '每隔 1 小时' }]} />
                       </div>
                     </div>
-                    {selectedSource === source.id && (
-                      <div style={styles.checkIcon}>
-                        <Check size={18} />
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </Space>
-            </section>
-
-            {/* 账号设置 */}
-            <section id="account" style={styles.section}>
-              <div style={styles.sectionTitle}>账号设置</div>
-              <Button
-                type="dashed"
-                icon={<Plus size={18} />}
-                onClick={() => setIsModalOpen(true)}
-                style={styles.dashedButton}
-              >
-                关联账号
-              </Button>
-              <div style={styles.errorText}>请设置一个关联账号</div>
-            </section>
-
-            {/* 参数设置 */}
-            <section id="params" style={styles.section}>
-              <div style={styles.sectionTitle}>参数设置</div>
-              <div>
-                <div style={styles.paramLabel}>
-                  <span style={styles.paramLabelText}>时间范围</span>
-                  <span style={styles.requiredStar}>*</span>
-                  <Tooltip title="选择同步的时间范围">
-                    <Info size={14} style={{ color: '#bbbfc4', cursor: 'help' }} />
-                  </Tooltip>
-                </div>
-                <Space size={12}>
-                  <Select defaultValue="recent" style={{ width: 160 }} options={[{ value: 'recent', label: '最近时间' }]} />
-                  <Select defaultValue="30d" style={{ width: 160 }} options={[{ value: '30d', label: '近 30 天' }]} />
-                </Space>
-              </div>
-            </section>
-
-            {/* 字段设置 */}
-            <section id="fields" style={styles.section}>
-              <div style={styles.sectionTitle}>字段设置</div>
-              <div style={{ marginBottom: 8 }}>
-                <div style={{ fontSize: 14, color: '#646a73', marginBottom: 8 }}>字段范围</div>
-                <div style={styles.fieldTable}>
-                  <div style={styles.fieldHeader}>
-                    <Checkbox defaultChecked>全选</Checkbox>
-                    <span style={{ fontSize: 12, color: '#8f959e' }}>已选择 57 项</span>
-                  </div>
-                  <div style={styles.fieldList}>
-                    {FIELDS.map((field) => (
-                      <div key={field.id} style={styles.fieldItem}>
-                        <Checkbox defaultChecked disabled={field.locked}>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={styles.fieldTypeBadge}>{field.type}</span>
-                            <span style={{ color: field.locked ? '#bbbfc4' : 'inherit' }}>{field.name}</span>
-                            {field.locked && <Lock size={12} style={{ color: '#bbbfc4' }} />}
-                          </span>
-                        </Checkbox>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div style={{ marginTop: 16 }}>
-                <div style={{ fontSize: 14, color: '#646a73', marginBottom: 12 }}>未来新增字段</div>
-                <Radio.Group defaultValue="include">
-                  <Space direction="vertical">
-                    <Radio value="include">包含</Radio>
-                    <Radio value="exclude">不包含</Radio>
+                    <Radio value="scheduled">定时同步</Radio>
                   </Space>
                 </Radio.Group>
-              </div>
-            </section>
-
-            {/* 同步设置 */}
-            <section id="sync" style={{ ...styles.section, marginBottom: 40 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <div style={styles.sectionTitle}>同步设置</div>
-                <Switch defaultChecked size="small" />
-              </div>
-              <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 16 }}>
-                根据你的设置，连接器会自动同步最新数据到当前数据表
-              </Text>
-              <Radio.Group defaultValue="hourly">
-                <Space direction="vertical" size={16}>
-                  <div>
-                    <Radio value="hourly">按小时同步</Radio>
-                    <div style={{ marginLeft: 24, marginTop: 8 }}>
-                      <Select defaultValue="1h" style={{ width: 160 }} options={[{ value: '1h', label: '每隔 1 小时' }]} />
-                    </div>
-                  </div>
-                  <Radio value="scheduled">定时同步</Radio>
-                </Space>
-              </Radio.Group>
-            </section>
+              </section> */}
+            </Form>
           </div>
 
           {/* 底部按钮 */}
@@ -405,11 +628,11 @@ export default function App() {
         open={isModalOpen}
         onCancel={() => setIsModalOpen(false)}
         footer={null}
-        width={520}
+        width='50vw'
         centered
         closeIcon={<X size={20} />}
         title={null}
-        bodyStyle={{ padding: '24px 32px' }}
+        styles={{ body: { padding: '24px 32px' } }}
       >
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           {/* <div
@@ -429,11 +652,11 @@ export default function App() {
           </div> */}
           
           <Title level={4} style={{ margin: 0 }}>
-            关联 旺店通旗舰版 账号
+            {account ? '修改' : '关联'} 万邑通 账号
           </Title>
         </div>
 
-        <Form form={modalForm} layout="vertical" requiredMark={false}>
+        <Form form={modalForm} layout="vertical" requiredMark={false} onFinish={handleAccountSave}>
           <Form.Item
             label={
               <span>
@@ -445,6 +668,7 @@ export default function App() {
             }
             name="accountName"
             initialValue="我的“万邑通”连接器"
+            rules={[{ required: true, message: '请输入账号名称' }]}
           >
             <Input suffix={<span style={{ fontSize: 12, color: '#bbbfc4' }}>13/100</span>} />
           </Form.Item>
@@ -455,6 +679,7 @@ export default function App() {
               </span>
             }
             name="sellerAccount"
+            rules={[{ required: true, message: '请输入卖家账号' }]}
           >
             <Input placeholder="请输入" />
           </Form.Item>
@@ -462,20 +687,21 @@ export default function App() {
             label={
               <span>
                 TOKEN <span style={{ color: '#f54a45' }}>*</span>
-                <Tooltip title="旺店通提供的接口账号">
+                <Tooltip title="卖家账号的TOKEN">
                   <Info size={14} style={{ marginLeft: 4, color: '#bbbfc4' }} />
                 </Tooltip>
               </span>
             }
             name="token"
+            rules={[{ required: true, message: '请输入TOKEN' }]}
           >
             <Input placeholder="请输入" />
           </Form.Item>
-          <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+          <div style={{ display: 'flex', gap: 12, marginTop: 40 }}>
             <Button style={{ flex: 1 }} onClick={() => setIsModalOpen(false)}>
               取消
             </Button>
-            <Button type="primary" style={{ flex: 1 }} onClick={() => setIsModalOpen(false)}>
+            <Button type="primary" style={{ flex: 1 }} onClick={() => modalForm.submit()}>
               确定
             </Button>
           </div>
