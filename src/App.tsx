@@ -78,6 +78,8 @@ const FIELDS = [
 ];
 
 export default function App() {
+  const [isCreate, setIsCreate] = useState(false);
+  const [configStr, setConfigStr] = useState('');
   const [activeNav, setActiveNav] = useState('datasource');
   const [action, setAction] = useState('queryWarehouseStorage');
   const [warehouseID, setWarehouseID] = useState('1030075');
@@ -113,9 +115,20 @@ export default function App() {
   const [newlyAddedFields, setNewlyAddedFields] = useState(true)
 
   useEffect(() => {
+    const params = window.location.search.slice(1).split('&');
+    const isCreate = params.some(param => {
+        const [key, value] = param.split('=');
+        if (key === 'isNew' && value) {
+            return true;
+        }
+    });
+    setIsCreate(isCreate);
+
     bitable.getConfig().then(config => {
+      setConfigStr(JSON.stringify(config))
       if (config?.value) {
         // Handle existing config if needed
+        setAccount(config?.value.account)
       }
     });
     bitable.getUserId().then(id => setUserId(id));
@@ -220,7 +233,7 @@ export default function App() {
     { key: 'datasource', label: '数据源选择', icon: <Database size={16} /> },
     { key: 'account', label: '账号设置', icon: <UserCog size={16} /> },
     // { key: 'params', label: '参数设置', icon: <Settings size={16} /> },
-    { key: 'fields', label: '字段设置', icon: <LayoutGrid size={16} /> },
+    // { key: 'fields', label: '字段设置', icon: <LayoutGrid size={16} /> },
     // { key: 'sync', label: '同步设置', icon: <RefreshCw size={16} /> },
   ];
 
@@ -228,7 +241,7 @@ export default function App() {
   const styles = {
     container: { display: 'flex', height: '100vh', backgroundColor: '#fff' },
     sidebar: {
-      width: 256,
+      width: 240,
       borderRight: '1px solid #dee0e3',
       display: 'flex',
       flexDirection: 'column' as const,
@@ -244,6 +257,10 @@ export default function App() {
       color: '#646a73',
     },
     mainArea: { flex: 1, display: 'flex', flexDirection: 'column' as const, overflow: 'hidden' },
+    configScroll: {
+      overflowWrap: 'break-word' as const,
+      wordBreak: 'break-word' as const,
+    },
     scrollArea: {
       flex: 1,
       overflowY: 'auto' as const,
@@ -251,7 +268,7 @@ export default function App() {
       scrollBehavior: 'smooth' as const,
     },
     scrollContainer: {
-      width: '50vw',
+      width: '100%',
     },
     section: { marginBottom: 40 },
     sectionTitle: { fontSize: 16, fontWeight: 500, marginBottom: 16 },
@@ -359,6 +376,7 @@ export default function App() {
 
         {/* 主内容区域 */}
         <div style={styles.mainArea}>
+          <div style={styles.configScroll}>config: {configStr}</div>
           <div ref={scrollContainerRef} style={styles.scrollArea}>
             <Form
               form={form}
@@ -512,7 +530,7 @@ export default function App() {
               </section> */}
 
               {/* 字段设置 */}
-              <section id="fields" style={styles.section}>
+              {/* <section id="fields" style={styles.section}>
                 <div style={styles.sectionTitle}>字段设置</div>
                 <div style={{ marginBottom: 8 }}>
                   <div style={{ fontSize: 14, color: '#646a73', marginBottom: 8 }}>字段范围</div>
@@ -587,7 +605,7 @@ export default function App() {
                     </Space>
                   </Radio.Group>
                 </div>
-              </section>
+              </section> */}
 
               {/* 同步设置 */}
               {/* <section id="sync" style={{ ...styles.section, marginBottom: 40 }}>
@@ -615,7 +633,7 @@ export default function App() {
 
           {/* 底部按钮 */}
           <div style={styles.footer}>
-            <Button>取消</Button>
+            {/* <Button>取消</Button> */}
             <Button type="primary" onClick={() => form.submit()}>
               创建
             </Button>
@@ -628,7 +646,7 @@ export default function App() {
         open={isModalOpen}
         onCancel={() => setIsModalOpen(false)}
         footer={null}
-        width='50vw'
+        width='60vw'
         centered
         closeIcon={<X size={20} />}
         title={null}
