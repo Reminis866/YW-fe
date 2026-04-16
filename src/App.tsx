@@ -79,7 +79,6 @@ const FIELDS = [
 
 export default function App() {
   const [isCreate, setIsCreate] = useState(false);
-  const [configStr, setConfigStr] = useState('');
   const [activeNav, setActiveNav] = useState('datasource');
   const [action, setAction] = useState('queryWarehouseStorage');
   const [warehouseID, setWarehouseID] = useState('1030075');
@@ -115,20 +114,25 @@ export default function App() {
   const [newlyAddedFields, setNewlyAddedFields] = useState(true)
 
   useEffect(() => {
-    const params = window.location.search.slice(1).split('&');
-    const isCreate = params.some(param => {
-        const [key, value] = param.split('=');
-        if (key === 'isNew' && value) {
-            return true;
-        }
-    });
-    setIsCreate(isCreate);
+    // const params = window.location.search.slice(1).split('&');
+    // const isCreate = params.some(param => {
+    //     const [key, value] = param.split('=');
+    //     if (key === 'isNew' && value) {
+    //         return true;
+    //     }
+    // });
+    // setIsCreate(isCreate);
 
     bitable.getConfig().then(config => {
-      setConfigStr(JSON.stringify(config))
-      if (config?.value) {
+      if (config?.account) {
         // Handle existing config if needed
-        setAccount(config?.value.account)
+        setAccount(config.account);
+      }
+      if (config?.action) {
+        setAction(config.action);
+      }
+      if (config.warehouseID) {
+        setWarehouseID(config.warehouseID);
       }
     });
     bitable.getUserId().then(id => setUserId(id));
@@ -376,7 +380,6 @@ export default function App() {
 
         {/* 主内容区域 */}
         <div style={styles.mainArea}>
-          <div style={styles.configScroll}>config: {configStr}</div>
           <div ref={scrollContainerRef} style={styles.scrollArea}>
             <Form
               form={form}
