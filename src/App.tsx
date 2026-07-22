@@ -9,6 +9,7 @@ import {
   Button,
   Form,
   Input,
+  InputNumber,
   Checkbox,
   Select,
   Switch,
@@ -44,14 +45,41 @@ import {
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
-const DATA_SOURCES = [
-  { id: 'queryWarehouseStorage', title: '商品库存列表', desc: '同步指定海外仓的库存数据' },
-];
+interface Source {
+  id: string;
+  title: string;
+  desc: string;
+  warehouses: Array<{
+    id: string;
+    title: string;
+    desc: string;
+  }>;
+}
 
-const WAREHOUSE = [
-  { id: '1030075', title: 'CATO Warehouse', desc: ''},
-  { id: '1000001', title: 'AU Warehouse', desc: ''},
-  { id: '1054191', title: 'USWC2 Warehouse', desc: ''},
+const DATA_SOURCES: Source[] = [
+  { id: 'queryWarehouseStorage', title: '获取库存列表', desc: '同步指定海外仓的库存数据', 
+    warehouses: [
+      { id: '1030075', title: 'CATO Warehouse', desc: ''},
+      { id: '1000001', title: 'AU Warehouse', desc: ''},
+      { id: '1054191', title: 'USWC2 Warehouse', desc: ''},
+    ], 
+  },
+  { id: 'getProductInventory', title: '获取库存列表(德国、英国)', desc: '同步指定海外仓的库存数据(德国、英国)',
+    warehouses: [
+      { id: 'DE001', title: '德国芯仓', desc: ''},
+      { id: 'JW', title: 'JW (英国)', desc: ''},
+    ],
+  },
+  { id: 'getInventory', title: '获取库存列表(香港)', desc: '同步指定海外仓的库存数据(香港)',
+    warehouses: [
+      { id: 'dg_putong', title: '东莞普通(香港)', desc: '同时获取 云望创新（香港） 和 云望创新（维修） 的数据'},
+    ],
+  },
+  { id: 'getStockListForApi', title: '获取库存列表(新加坡)', desc: '同步指定海外仓的库存数据(新加坡)',
+    warehouses: [
+      { id: '156', title: '(A仓)海乐购新加坡备货仓(新加坡)', desc: ''},
+    ],
+  },
 ];
 
 const FIELDS = [
@@ -81,8 +109,11 @@ export default function App() {
   const [isCreate, setIsCreate] = useState(false);
   const [activeNav, setActiveNav] = useState('datasource');
   const [action, setAction] = useState('queryWarehouseStorage');
+  const [actionData, setActionData] = useState(DATA_SOURCES[0]);
   const [warehouseID, setWarehouseID] = useState('1030075');
   const [account, setAccount] = useState<Record<string, string> | null>(null);
+  const [days, setDays] = useState(30);
+  const [daysError, setDaysError] = useState('');
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [form] = Form.useForm();
@@ -92,6 +123,8 @@ export default function App() {
 
   const [userId, setUserId] = useState('');
   const [tenantKey, setTenantKey] = useState('');
+
+  const needsAccount = action !== 'getInventory' && action !== 'getStockListForApi';
 
   // 校验错误状态
   const [accountError, setAccountError] = useState('');
@@ -130,9 +163,14 @@ export default function App() {
       }
       if (config?.action) {
         setAction(config.action);
+        const matched = DATA_SOURCES.find(s => s.id === config.action);
+        if (matched) setActionData(matched);
       }
       if (config.warehouseID) {
         setWarehouseID(config.warehouseID);
+      }
+      if (config?.days != null) {
+        setDays(Number(config.days));
       }
     });
     bitable.getUserId().then(id => setUserId(id));
@@ -162,6 +200,12 @@ export default function App() {
     return () => observer.disconnect();
   }, []);
 
+  const switchAction = (source: Source) => {
+    setAction(source.id);
+    setActionData(source);
+    setWarehouseID('');
+  }
+
   const scrollToSection = (id: string) => {
     const element = document.getElementById(id);
     if (element && scrollContainerRef.current) {
@@ -178,11 +222,22 @@ export default function App() {
   const validateStateFields = (): boolean => {
     let valid = true;
 
-    if (!account) {
+    if (needsAccount && !account) {
       setAccountError('请设置一个关联账号');
       valid = false;
     } else {
       setAccountError('');
+    }
+
+    if (action === 'getInventory') {
+      if (days == null || days < 1 || days > 365) {
+        setDaysError('天数范围为 1–365');
+        valid = false;
+      } else {
+        setDaysError('');
+      }
+    } else {
+      setDaysError('');
     }
 
     const lockedCount = FIELDS.filter(f => f.locked).length;
@@ -195,7 +250,12 @@ export default function App() {
 
     // 校验不通过时滚动到第一个出错的区域
     if (!valid) {
-      const firstErrorSection = !account ? 'account' : 'fields';
+      const firstErrorSection =
+        action === 'getInventory' && (days == null || days < 1 || days > 365)
+          ? 'params'
+          : needsAccount && !account
+            ? 'account'
+            : 'fields';
       scrollToSection(firstErrorSection);
     }
 
@@ -211,7 +271,8 @@ export default function App() {
       warehouseID: warehouseID,
       selectedFieldIds: Array.from(selectedFieldIds),
       newlyAddedFields,
-      account,
+      account: needsAccount ? account : null,
+      ...(action === 'getInventory' ? { days } : {}),
     };
     console.log(payload);
 
@@ -235,8 +296,12 @@ export default function App() {
 
   const navItems = [
     { key: 'datasource', label: '数据源选择', icon: <Database size={16} /> },
-    { key: 'account', label: '账号设置', icon: <UserCog size={16} /> },
-    // { key: 'params', label: '参数设置', icon: <Settings size={16} /> },
+    ...(action === 'getInventory'
+      ? [{ key: 'params', label: '参数设置', icon: <Settings size={16} /> }]
+      : []),
+    ...(needsAccount
+      ? [{ key: 'account', label: '账号设置', icon: <UserCog size={16} /> }]
+      : []),
     // { key: 'fields', label: '字段设置', icon: <LayoutGrid size={16} /> },
     // { key: 'sync', label: '同步设置', icon: <RefreshCw size={16} /> },
   ];
@@ -394,7 +459,7 @@ export default function App() {
                   {DATA_SOURCES.map((source) => (
                     <div
                       key={source.id}
-                      onClick={() => setAction(source.id)}
+                      onClick={() => switchAction(source)}
                       style={styles.dataSourceCard(action === source.id)}
                     >
                       <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -420,7 +485,7 @@ export default function App() {
               <section id="warehouse" style={styles.section}>
                 <div style={styles.sectionTitle}>选择仓库</div>
                 <Space direction='vertical' style={{ width: '100%' }} size={12}>
-                  {WAREHOUSE.map((warehouse) => (
+                  {actionData.warehouses.map((warehouse) => (
                     <div
                       key={warehouse.id}
                       onClick={() => setWarehouseID(warehouse.id)}
@@ -445,7 +510,38 @@ export default function App() {
                 </Space>
               </section>
 
-              {/* 账号设置 */}
+              {/* 参数设置：仅 getInventory 需要天数 */}
+              {action === 'getInventory' && (
+                <section id="params" style={styles.section}>
+                  <div style={styles.sectionTitle}>参数设置</div>
+                  <div>
+                    <div style={styles.paramLabel}>
+                      <span style={styles.paramLabelText}>天数</span>
+                      <span style={styles.requiredStar}>*</span>
+                      <Tooltip title="查询最近 N 天的库存数据，范围 1–365">
+                        <Info size={14} style={{ color: '#bbbfc4', cursor: 'help' }} />
+                      </Tooltip>
+                    </div>
+                    <InputNumber
+                      min={1}
+                      max={365}
+                      value={days}
+                      onChange={(v) => {
+                        setDays(typeof v === 'number' ? v : 30);
+                        setDaysError('');
+                      }}
+                      style={{
+                        width: 160,
+                        borderColor: daysError ? '#f54a45' : undefined,
+                      }}
+                    />
+                    {daysError && <div style={styles.errorText}>{daysError}</div>}
+                  </div>
+                </section>
+              )}
+
+              {/* 账号设置：getInventory / getStockListForApi 不需要账号 */}
+              {needsAccount && (
               <section id="account" style={styles.section}>
                 <div style={styles.sectionTitle}>账号设置</div>
                 {account ? (
@@ -513,6 +609,7 @@ export default function App() {
                   </>
                 )}
               </section>
+              )}
 
               {/* 参数设置 */}
               {/* <section id="params" style={styles.section}>
