@@ -73,6 +73,7 @@ const DATA_SOURCES: Source[] = [
   { id: 'getInventory', title: '获取库存列表(香港)', desc: '同步指定海外仓的库存数据(香港)',
     warehouses: [
       { id: 'dg_putong', title: '东莞普通(香港)', desc: '同时获取 云望创新（香港） 和 云望创新（维修） 的数据'},
+      { id: 'hk_fh_new', title: '香港RMS仓', desc: '同时获取 云望创新（香港） 和 云望创新（维修） 的数据'},
     ],
   },
   { id: 'getStockListForApi', title: '获取库存列表(新加坡)', desc: '同步指定海外仓的库存数据(新加坡)',
